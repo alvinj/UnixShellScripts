@@ -1,0 +1,37 @@
+#!/bin/sh
+
+#-----------------------------------------------------
+# explore - a way to explore lines around a grep match
+#-----------------------------------------------------
+# usage:   explore numLinesBeforeAfter regex filename
+#-----------------------------------------------------
+# examples:
+#    explore Ext.data foo/bar/Baz.js
+#-----------------------------------
+
+# quit if there are not two command line parameters
+
+if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]
+then
+    echo ""
+    echo "  Usage:    explore numLinesBeforeAfter regex filename"
+    echo "  Example:  explore 5 StringBuffer java"
+    exit -1
+fi
+
+
+#---------------------------------
+# params are good, run the command
+#---------------------------------
+
+NLINES=$1
+REGEX=$2
+FILENAME=$3
+
+a=`grep -C${NLINES} $REGEX $FILENAME`
+b=`echo "$a" | sed -Ee "s/(.*)($REGEX)(.*)/\1\\\\\033[7m\2\\\\\033[0m\3/g"`
+echo "------------------------------------------------------------------------"
+echo "$b"
+echo "------------------------------------------------------------------------"
+
+

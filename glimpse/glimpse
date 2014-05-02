@@ -1,0 +1,166 @@
+#!/bin/bash
+
+# quit if there are not two command line parameters
+
+if [ -z "$1" ] || [ -z "$2" ]
+then
+    echo ""
+    echo "  Use this interactive script to search for text in files,"
+    echo "  like an interactive find/grep tool."
+    echo ""
+    echo "  Usage:"
+    echo "  ------"
+    echo "     glimpse regex dir"
+    echo "     glimpse regex dir [fileExtensionNoWildcards]"
+    echo ""
+    echo "  Examples:"
+    echo "  ---------"
+    echo "     glimpse StringBuffer src"
+    echo "     glimpse StringBuffer src java"
+    echo ""
+    exit -1
+fi
+
+#---------------------------------
+# params are good, run the command
+#---------------------------------
+
+export REGEX=$1
+export AB_LINES=15
+
+# need to keep the count somewhere because of sub-shells
+export COUNTER_FILE="counter.tmp"
+echo "0" > $COUNTER_FILE
+
+# put the files we find here
+export FILES_FOUND="files_found.tmp"
+rm $FILES_FOUND
+
+#------------------------------------------------------------------------------------------
+# the grep command returns something like "filename:lineNumber: text"
+# the text may also contain a ":" character
+# 'a' can have multiple lines for one file
+# i added the -i option to grep because that's what i usually want
+# 4m is underscore, 7m is reverse video
+# mac sed does not support case-insensitive search and replace; use awk or something else
+#------------------------------------------------------------------------------------------
+
+function DO() {
+    filename=$1
+    count=`cat $COUNTER_FILE`
+    a="`grep -inH $REGEX $filename`"
+    if [ -n "$a" ]
+    then
+        b=`echo "$a" | tr -s '  ' ' ' | tr -s '\t' ' '`
+        c=`echo "$b" | sed -Ee "s/(.*)($REGEX)(.*)/\1\\\\\033[7m\2\\\\\033[0m\3/g"`
+        d=`echo -e "$c" | awk -F  ":" '{ printf "%s:%s:\t\t", $1, $2; for(i=3;i<=NF;i++){printf "%s ", $i}; printf "\n"; }'`
+        echo "$d" >> $FILES_FOUND
+        ((count++))
+        echo $count > $COUNTER_FILE
+    fi
+}
+
+export -f DO
+
+#-----
+# find
+#-----
+
+echo "Finding files, please stand by ..."
+
+if [ -z "$3" ]
+then
+    find $2 -type f -exec /bin/bash -c 'DO "{}"' \;
+else
+    find $2 -type f -name "*$3" -exec /bin/bash -c 'DO "{}"' \;
+fi
+
+function listFiles() {
+    count=1
+    IFS=$'\n'
+    #for i in "${FILES[@]}"
+    for i in `cat $FILES_FOUND`
+    do
+        echo "[$count] $i"
+        (( count++ ))
+    done
+}
+
+function prompt() {
+    echo ''
+    echo -n "Pick a number or 'q' to quit: "
+}
+
+function handleSelection() {
+    echo "you selected $1"
+    listFiles
+}
+
+function exploreFile() {
+    NLINES=$1
+    REGEX=$2
+    FILENAME=$3
+
+    echo "$1"
+    echo "$2"
+    echo "$3"
+    #a=`grep -C${NLINES} $REGEX $FILENAME`
+    #b=`echo "$a" | sed -Ee "s/(.*)($REGEX)(.*)/\1\\\\\033[7m\2\\\\\033[0m\3/g"`
+    #echo "------------------------------------------------------------"
+    #echo "$b"
+    #echo "------------------------------------------------------------"
+}
+
+function exploreFile2() {
+    local filename=$1
+    echo ""
+    echo "===== From $filename ====="
+    echo ""
+    a=`grep -i -C${AB_LINES} $REGEX $filename`
+    b=`echo "$a" | sed -Ee "s/(.*)($REGEX)(.*)/\1\\\\\033[7m\2\\\\\033[0m\3/g"`
+    echo "------------------------------------------------------------"
+    echo -e "$b"
+    echo "------------------------------------------------------------"
+    echo ""
+    echo -n "Hit [Enter] to continue: "
+    read junk
+    echo ""
+}
+
+function handleSearch() {
+    local fileNumber=$1
+    local filename=''
+    local filecount=1
+    IFS=$'\n'
+    for i in `cat $FILES_FOUND`
+    do
+        if [ $filecount -eq $fileNumber ]; then
+            filename=`echo $i | cut -d: -f1`
+            exploreFile2 $filename
+        fi
+        (( filecount++ ))
+    done
+}
+
+
+#----------
+# main loop
+#----------
+
+echo ""
+listFiles
+prompt
+while read line
+do
+    if [ "$line" = "q" ]; then
+        exit
+    elif [ -z "$line" ]; then
+        listFiles
+    else
+        handleSearch $line
+        listFiles
+    fi
+    prompt
+done
+
+

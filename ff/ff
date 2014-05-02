@@ -1,0 +1,68 @@
+#!/bin/sh
+
+#-----------------------------------------
+# ff - a 'file find' utility
+#-----------------------------------------
+# usage: ff 'regex' dir(s) [filenameRegex]
+#-----------------------------------------
+# examples:
+#    ff Ext.getCmp src
+#    ff StringBuffer src java
+#-----------------------------------------
+
+# quit if there are not two command line parameters
+
+if [ -z "$1" ] || [ -z "$2" ]
+then
+    echo ""
+    echo "  Usage:"
+    echo "     ff regex dir"
+    echo "     ff regex dir [fileExtensionNoWildcards]"
+    echo ""
+    echo "  Example:"
+    echo "     ff StringBuffer src java"
+    exit -1
+fi
+
+
+#---------------------------------
+# params are good, run the command
+#---------------------------------
+
+export REGEX=$1
+
+#------------------------------------------------------------------------------------------
+# the grep command returns something like "filename:lineNumber: text"
+# the text may also contain a ":" character
+# 'a' can have multiple lines for one file
+# i added the -i option to grep because that's what i usually want
+# 4m is underscore, 7m is reverse video
+# mac sed does not support case-insensitive search and replace; use awk or something else
+#------------------------------------------------------------------------------------------
+
+function DO() {
+  filename=$1
+  a="`grep -inH $REGEX $filename`"
+  if [ -n "$a" ]
+  then
+      b=`echo "$a" | tr -s '  ' ' ' | tr -s '\t' ' '`
+      c=`echo "$b" | sed -Ee "s/(.*)($REGEX)(.*)/\1\\\\\033[7m\2\\\\\033[0m\3/g"`
+      d=`echo -e "$c" | awk -F  ":" '{ printf "%s (%s):\t\t", $1, $2; for(i=3;i<=NF;i++){printf "%s ", $i}; printf "\n"; }'`
+      echo -e "$d"
+  fi
+}
+
+export -f DO
+
+#-----
+# find
+#-----
+
+if [ -z "$3" ]
+then
+    find $2 -type f -exec /bin/bash -c 'DO "{}"' \;
+else
+    find $2 -type f -name "*$3" -exec /bin/bash -c 'DO "{}"' \;
+fi
+
+
